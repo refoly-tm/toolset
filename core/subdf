@@ -5,6 +5,7 @@ import sys
 import time
 import os # To clear screen, if desired
 
+
 # global
 found_domains = []
 red = "\033[1;31m"
