@@ -3,6 +3,7 @@ import requests
 # global
 PAYLOADS = ["SELECT * FROM users WHERE username = '' OR '1'='1' AND password = '';"]
 
+
 # UI elements
 def success(message):
     print("*" *  len(message)  )
