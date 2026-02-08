@@ -1,112 +1,97 @@
 #!/usr/bin/env bash
 
-# =========================
-# Configuration
-# =========================
-SRC_DIR="core"
+SRC_DIR="bin"
 
-# =========================
-# UI Helpers
-# =========================
-sep() {
-	echo "─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─"
+# -------------------------
+# UI helpers
+# -------------------------
+line()   { echo "----------------------------------------"; }
+title()  { echo "[ $1 ]"; line; }
+
+msg() {
+	case "$1" in
+		ok)   echo "[OK]   $2" ;;
+		warn) echo "[WARN] $2" ;;
+		err)  echo "[ERR]  $2" ;;
+		info) echo "[INFO] $2" ;;
+	esac
 }
 
-header() {
-	echo "┌──── [ $1 ] ───────────────────────────┐"
-}
-
-footer() {
-	echo "└────────────────────────────────────────┘"
-}
-
-ok()    { echo " ✓ $1"; }
-warn()  { echo " ⚠ $1"; }
-err()   { echo " ✗ $1"; }
-info()  { echo " • $1"; }
-
-# =========================
-# Help Menu
-# =========================
+# -------------------------
+# Help
+# -------------------------
 show_help() {
-	header "SCRIPT COMMANDS"
-	echo "│ § SHOW        Display this help menu     │"
-	echo "│ ≡ LIST        List files in '$SRC_DIR'   │"
-	echo "│ ▶ <name>      Run executable <name>      │"
-	echo "│ ⌧ EXIT        Exit the script             │"
-	footer
-	sep
+	title "SCRIPT COMMANDS"
+	echo "show        - Display this help menu"
+	echo "list        - List files in '$SRC_DIR'"
+	echo "<name>      - Run executable <name>"
+	echo "exit        - Exit the script"
+	line
 }
 
-# =========================
-# File Listing
-# =========================
+# -------------------------
+# List files
+# -------------------------
 list_files() {
-	header "FILES IN '$SRC_DIR'"
+	title "FILES IN '$SRC_DIR'"
 
 	if [[ ! -d "$SRC_DIR" ]]; then
-		err "Directory '$SRC_DIR' not found."
-		footer
+		msg err "Directory not found."
 		return
 	fi
 
-	shopt -s nullglob
 	files=("$SRC_DIR"/*)
-	shopt -u nullglob
 
 	if [[ ${#files[@]} -eq 0 ]]; then
-		info "No files found."
+		msg info "No files found."
 	else
-		for file in "${files[@]}"; do
-			echo " │ ─ $(basename "$file")"
+		for f in "${files[@]}"; do
+			echo " - ${f##*/}"
 		done
 	fi
 
-	footer
+	line
 }
 
-# =========================
-# Run Executable
-# =========================
+# -------------------------
+# Run executable
+# -------------------------
 run_executable() {
-	local name="$1"
-	local path="$SRC_DIR/$name"
+	local path="$SRC_DIR/$1"
 
 	if [[ ! -f "$path" ]]; then
-		err "File '$name' not found in '$SRC_DIR'."
+		msg err "File not found."
 		return
 	fi
 
-	if [[ ! -x "$path" ]]; then
-		if ! chmod +x "$path" 2>/dev/null; then
-			err "Cannot make '$name' executable (permission denied)."
-			return
-		fi
+	if [[ ! -x "$path" ]] && ! chmod +x "$path" 2>/dev/null; then
+		msg err "Permission denied."
+		return
 	fi
 
-	ok "Running '$name'..."
-	"$path" || err "Execution failed."
+	msg ok "Running '$1'..."
+	"$path" || msg err "Execution failed."
 }
 
-# =========================
+# -------------------------
 # Startup
-# =========================
+# -------------------------
 list_files
 echo
 show_help
 
-# =========================
-# Main Loop
-# =========================
+# -------------------------
+# Main loop
+# -------------------------
 while true; do
-	read -rp "[ CMD | 'show' for help ] » " input
-	cmd="${input,,}"   # lowercase
+	read -rp "[cmd | 'show' for help] > " input
+	cmd="${input,,}"
 
 	case "$cmd" in
 		show) show_help ;;
 		list) list_files ;;
 		exit)
-			info "Exiting script. Goodbye."
+			msg info "exited..."
 			exit 0
 			;;
 		"") ;;
@@ -115,4 +100,3 @@ while true; do
 
 	echo
 done
-
