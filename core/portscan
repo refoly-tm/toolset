@@ -1,0 +1,85 @@
+#!/bin/python3 
+
+import socket
+from time import sleep
+import sys
+
+# global variables
+ports = []
+red = "\033[1;31m]"
+blue = "\033[1;34m"
+reset = "\033[0m"
+
+# UI elememnts
+def progress_bar(length: int , current: int , total: int) -> None: # x and y is used to do the calculations
+    progress = current / total # to avoid floats
+    filled = int(length * progress)
+
+    bar = "#" * filled + "." * ( length - filled )
+
+    sys.stdout.write(f"{blue}\r[{bar}] -- progress : { int(progress * 100)}%{reset}")
+    sys.stdout.flush() 
+
+
+# scanning logic
+print("*" * 50)
+sleep(0.5)
+def scan(ip: str , port: int , timeout: float) -> None:
+    sock = socket.socket( socket.AF_INET , socket.SOCK_STREAM)
+    sock.settimeout( timeout )
+
+    try:
+        if sock.connect_ex(( ip , port )) == 0:
+            ports.append(port)
+
+        # print(f"[DEBUG] scanned {port}")
+
+    except Exception as exp:
+        print(f"{red}[!] aborting due to {exp} {reset}")
+
+    finally:
+        sock.close()
+
+# basic service detection
+def get_service() -> None:
+
+    print("*" * 50)
+    lports = ports # local var assigning to reduce memo footprint ( a bit )
+    service = "unknown" # avoid unbound local error
+
+    for port in lports:
+        try:
+            service = socket.getservbyport(port)
+        
+        except OSError:
+            continue
+
+        finally:
+            print(f"[*] port = {port} || [*] service = {service}")
+
+
+# user input
+try:
+    ip = str(input("[INP] Ip address : "))
+    port_range = int(input("[INP] Port range : "))
+    timeout = float(input("[INP] Timeout (e.g 0.5) : "))
+
+    if port_range <= 0 or port_range > 65535:
+        print("[NOTE] encountred an invalid port range , falling to 1024")
+        port_range = 1024
+
+except Exception as exp:
+    print(f"{red}[!] aborting due {exp}{reset}")
+    exit()
+
+print("\033[2J\033[H") # this clears the screen ( ONLY WORKS ON TERMINALS THAT SUPPORTS COLORS )
+for port in range(1 , port_range + 1):
+        scan(ip , port , timeout)
+        progress_bar(50 , port , port_range)
+
+print()
+sleep(1.5)
+print("*" * 50)
+print(f"{blue}[*] Fininshed Scanning , trying to identify services ( BASIC ){reset}")
+sleep(1.5)
+get_service()

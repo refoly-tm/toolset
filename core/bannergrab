@@ -1,0 +1,211 @@
+#!/bin/python3
+
+import socket
+from time import sleep
+
+# --- ANSI Color Codes for UI (works in most modern terminals) ---
+# You can remove these if you prefer plain text.
+COLOR_BLUE = "\033[94m"
+COLOR_GREEN = "\033[92m"
+COLOR_YELLOW = "\033[93m"
+COLOR_RED = "\033[91m"
+COLOR_CYAN = "\033[96m"
+COLOR_RESET = "\033[0m"
+COLOR_BOLD = "\033[1m"
+COLOR_UNDERLINE = "\033[4m"
+# -----------------------------------------------------------------
+
+# global
+reply_size = 10000 # 10k
+print("\033[2J\033[H") # clears the screen
+
+def grab_tcp( ip: str, port: int, timeout: float) -> None:
+        sock = socket.socket( socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout( timeout )
+
+        try:
+            print(f"\n{COLOR_CYAN}{COLOR_BOLD}--- Attempting Generic TCP Grab on {ip}:{port} ---{COLOR_RESET}")
+            if sock.connect_ex(( ip, port )) == 0:
+                print(f"{COLOR_GREEN}[CE] Connection established.{COLOR_RESET}")
+                sleep(1)
+                print(f"{COLOR_YELLOW}[AG] Attempting to grab the banner...{COLOR_RESET}")
+                
+                data = sock.recv(reply_size).decode(errors="ignore")
+
+                if not data:
+                    print(f"{COLOR_YELLOW}[ND] No data received (empty banner).{COLOR_RESET}")
+
+                else:
+                    print(f"{COLOR_GREEN}[BN] Banner Received:{COLOR_RESET}")
+                    # Iterate and print each line for better readability
+                    for line in data.split("\n"):
+                        if line.strip(): # Only print non-empty lines
+                            print(f" - {line.strip()}")
+
+            else:
+                print(f"{COLOR_RED}[!] Failed to establish connection. (Is the target alive or port open?){COLOR_RESET}")
+        except Exception as exp:
+            print(f"{COLOR_RED}[!] Aborting due to unexpected error: {exp}{COLOR_RESET}")
+
+        finally:
+            sock.close()
+            print(f"{COLOR_CYAN}--- Generic TCP Grab Complete ---{COLOR_RESET}\n")
+
+def grab_http( ip, port, timeout) -> None:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout( timeout )
+
+    try:
+        print(f"\n{COLOR_CYAN}{COLOR_BOLD}--- Attempting HTTP Grab on {ip}:{port} ---{COLOR_RESET}")
+        REQ = (
+            f"GET / HTTP/1.1\r\n"
+            f"Host: {ip}\r\n"
+            f"Connection: close\r\n\r\n"
+        )
+        
+        # Ensure connection is established before sending (this was missing before)
+        if sock.connect_ex(( ip, port )) == 0:
+            print(f"{COLOR_GREEN}[CE] Connection established.{COLOR_RESET}")
+            sleep(0.5) # Short delay before sending request
+            print(f"{COLOR_YELLOW}[REQ] Sending HTTP GET request...{COLOR_RESET}")
+            sock.sendall(REQ.encode())
+            
+            sleep(1) # Give server time to respond
+            print(f"{COLOR_YELLOW}[AG] Attempting to grab HTTP banner...{COLOR_RESET}")
+            data = sock.recv(reply_size).decode(errors="ignore")
+
+            if not data:
+                print(f"{COLOR_YELLOW}[ND] No HTTP banner received.{COLOR_RESET}")
+
+            else:
+                print(f"{COLOR_GREEN}[BN] HTTP Banner Received:{COLOR_RESET}")
+                # Print each line for cleaner output
+                for line in data.split("\r\n"):
+                    if line.strip(): # Only print non-empty lines
+                        print(f" - {line.strip()}")
+        else:
+            print(f"{COLOR_RED}[!] Failed to establish connection for HTTP. (Is the target alive or port open?){COLOR_RESET}")
+
+    except Exception as exp:
+        print(f"{COLOR_RED}[!] Aborting HTTP grab due to unexpected error: {exp}{COLOR_RESET}")
+
+    finally:
+        sock.close()
+        print(f"{COLOR_CYAN}--- HTTP Grab Complete ---{COLOR_RESET}\n")
+
+def grab_ftp( ip, port, timeout ) -> None: # Added ip and port to function signature
+    sock = socket.socket( socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout( timeout )
+
+    try:
+        print(f"\n{COLOR_CYAN}{COLOR_BOLD}--- Attempting FTP Grab on {ip}:{port} ---{COLOR_RESET}")
+        # Ensure connection is established before sending (this was missing before)
+        if sock.connect_ex(( ip, port )) == 0:
+            print(f"{COLOR_GREEN}[CE] Connection established.{COLOR_RESET}")
+            sleep(0.5) # Short delay after connection
+            print(f"{COLOR_YELLOW}[AG] Attempting to grab initial FTP banner...{COLOR_RESET}")
+            initial_data = sock.recv(reply_size).decode(errors="ignore")
+
+            if initial_data.strip():
+                print(f"{COLOR_GREEN}[BN] Initial FTP Banner Received:{COLOR_RESET}")
+                for line in initial_data.split("\n"):
+                    if line.strip():
+                        print(f" - {line.strip()}")
+            else:
+                print(f"{COLOR_YELLOW}[ND] No initial FTP banner received.{COLOR_RESET}")
+
+            # Now send the USER anonymous command
+            REQ = """ USER anonymous\r\n """
+            print(f"{COLOR_YELLOW}[REQ] Sending 'USER anonymous' command...{COLOR_RESET}")
+            sock.sendall(REQ.encode())
+            
+            sleep(1) # Give server time to respond
+            print(f"{COLOR_YELLOW}[AG] Attempting to grab FTP response after command...{COLOR_RESET}")
+            data_after_cmd = sock.recv(reply_size).decode(errors="ignore")
+
+            if not data_after_cmd:
+                print(f"{COLOR_YELLOW}[ND] No further data received after command.{COLOR_RESET}")
+
+            else:
+                print(f"{COLOR_GREEN}[BN] FTP Response After Command:{COLOR_RESET}")
+                for line in data_after_cmd.split("\n"):
+                    if line.strip():
+                        print(f" - {line.strip()}")
+        else:
+            print(f"{COLOR_RED}[!] Failed to establish connection for FTP. (Is the target alive or port open?){COLOR_RESET}")
+
+    except Exception as exp:
+        print(f"{COLOR_RED}[!] Aborting FTP grab due to unexpected error: {exp}{COLOR_RESET}")
+
+    finally:
+        sock.close()
+        print(f"{COLOR_CYAN}--- FTP Grab Complete ---{COLOR_RESET}\n")
+
+def grab_by_service(ip, port, timeout, service) -> None:
+    sleep(0.5)
+    print(f"\n{COLOR_BLUE}{COLOR_BOLD}--- Dispatching to Service Handler ---{COLOR_RESET}")
+    print(f" {COLOR_BLUE}Target IP:{COLOR_RESET} {ip}")
+    print(f" {COLOR_BLUE}Port:{COLOR_RESET} {port}")
+    print(f" {COLOR_BLUE}Service Type:{COLOR_RESET} {service.upper()}")
+    print(f" {COLOR_BLUE}Timeout:{COLOR_RESET} {timeout}s")
+    print(f"{COLOR_BLUE}------------------------------------{COLOR_RESET}\n")
+
+    sleep(1)
+
+    if service == "http":
+        grab_http(ip, port, timeout)
+    elif service == "ftp":
+        grab_ftp(ip, port, timeout)
+    # Add other service types here (e.g., elif service == "ssh": grab_ssh(ip, port, timeout))
+    else:
+        grab_tcp(ip, port, timeout)
+
+# --- Main execution block ---
+if True: # look i know its useless but i cant re-indent all those lines okay , im using stock neovim
+    print(f"\n{COLOR_BOLD}{COLOR_BLUE}{COLOR_UNDERLINE}========== Banner Grabber =========={COLOR_RESET}\n")
+    ip = str(input(f"{COLOR_YELLOW}[INP] Enter Target IP Address :{COLOR_RESET} "))
+    port_input = input(f"{COLOR_YELLOW}[INP] Enter Target Port :{COLOR_RESET} ")
+    try:
+        port = int(port_input)
+    except ValueError:
+        print(f"{COLOR_RED}[!] Invalid port number '{port_input}'. Exiting.{COLOR_RESET}")
+        sys.exit(1) # Exit if port is invalid
+
+    print(f"\n{COLOR_BLUE}[NOTE] Auto Service detection is basic and may not be fully accurate. {COLOR_RESET}")
+    print(f"{COLOR_BLUE}[NOTE] Manual assignment is recommended for specific services.{COLOR_RESET}")
+    manual_serv_id = str(input(f"{COLOR_YELLOW}[INP] Assign Service Manually? [Y]es / [N]o (recommended: Y):{COLOR_RESET} ")).strip()
+
+    service = "unknown" # Default service
+
+    if manual_serv_id.lower() == "y":
+        service = str(input(f"{COLOR_YELLOW}[INP] Enter Service Type (e.g., http, ftp, ssh, generic_tcp):{COLOR_RESET} ")).lower().strip()
+        print(f"{COLOR_GREEN}[INFO] Manually assigned service: {service.upper()}{COLOR_RESET}")
+    else:
+        print(f"{COLOR_BLUE}[INFO] Proceeding with auto-detection (may be inaccurate!).{COLOR_RESET}")
+        try:
+            # Your original socket.getservbyport call
+            service = socket.getservbyport(port)
+            print(f"{COLOR_GREEN}[DS] Auto-detected service for port {port}: {service.upper()}{COLOR_RESET}")
+        except Exception:
+            print(f"{COLOR_YELLOW}[DS] Auto-detection failed for port {port}. Defaulting to 'generic_tcp'.{COLOR_RESET}")
+            service = "generic_tcp" # Fallback if getservbyport fails
+
+    timeout_input = input(f"{COLOR_YELLOW}[INP] Enter Timeout in seconds (e.g., 0.5):{COLOR_RESET} ")
+    try:
+        timeout = float(timeout_input)
+    except ValueError:
+        print(f"{COLOR_RED}[!] Invalid timeout value '{timeout_input}'. Using default 1.0 second.{COLOR_RESET}")
+        timeout = 1.0 # Default if invalid input
+
+    sleep(0.5)
+    print(f"\n{COLOR_BOLD}{COLOR_BLUE}===================================={COLOR_RESET}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE}Starting Scan Details:{COLOR_RESET}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE} Target IP: {COLOR_RESET}{ip}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE} Target Port: {COLOR_RESET}{port}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE} Service: {COLOR_RESET}{service.upper()}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE} Timeout: {COLOR_RESET}{timeout}s")
+    print(f"{COLOR_BOLD}{COLOR_BLUE}===================================={COLOR_RESET}\n")
+
+    grab_by_service(ip, port, timeout, service)
+
+    print(f"\n{COLOR_BOLD}{COLOR_BLUE}========== Scan Finished =========={COLOR_RESET}\n")

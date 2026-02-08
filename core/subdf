@@ -1,0 +1,117 @@
+#!/bin/python3
+
+import requests
+import sys
+import time
+import os # To clear screen, if desired
+
+# global
+found_domains = []
+red = "\033[1;31m"
+blue = "\033[1;34m"
+green = "\033[1;32m" # Added green for success/info messages
+yellow = "\033[1;33m" # Added yellow for warnings/loading
+reset = "\033[0m"
+
+# --- UI Elements & Helpers ---
+
+# Optional: Clear screen function
+def clear_screen():
+    # for windows
+    if os.name == 'nt':
+        _ = os.system('cls')
+    # for mac and linux(here, os.name is 'posix')
+    else:
+        _ = os.system('clear')
+
+def print_header(title):
+    clear_screen() # Clears screen at the start
+    print(f"{blue}{'='*60}{reset}")
+    print(f"{blue}{' ' * ((60 - len(title)) // 2)}{title}{reset}")
+    print(f"{blue}{'='*60}{reset}\n")
+
+def print_footer(message):
+    print(f"\n{blue}{'='*60}{reset}")
+    print(f"{blue}{' ' * ((60 - len(message)) // 2)}{message}{reset}")
+    print(f"{blue}{'='*60}{reset}\n")
+
+# --- Getting domain list logic ---
+def get_domains(target_site: str, timeout=10) -> None:
+    temp_domains = set()
+    url = f"https://crt.sh/?q=%25.{target_site}&output=json"
+    
+    print(f"{yellow}[INFO] Querying crt.sh for domains related to '{target_site}'...{reset}")
+    print(f"{yellow}[INFO] This might take a moment, please wait...{reset}")
+
+    try:
+        response = requests.get(url, timeout=timeout)
+        response.raise_for_status() # Raises HTTPError for bad responses (4xx or 5xx)
+        certs = response.json()
+
+        if certs:
+            for cert in certs:
+                common_name = cert.get("common_name")
+                if common_name and target_site in common_name:
+                    temp_domains.add(common_name.replace("*", ''))
+
+                name_value = cert.get("name_value")
+                if name_value: # Only process if name_value exists
+                    for entry in name_value.split(","):
+                        entry = entry.strip()
+                        if target_site in entry:
+                            temp_domains.add(entry.replace("*", ''))
+            
+            # The original script had an else here, but it would print repeatedly.
+            # Moved the "no data found" message to after the loop for clarity.
+        else:
+            print(f"{yellow}[WARNING] crt.sh returned an empty list of certificates for {target_site}.{reset}")
+
+    except requests.exceptions.HTTPError as e:
+        print(f"{red}[ERROR] HTTP Error: {e.response.status_code} - {e.response.reason}{reset}")
+    except requests.exceptions.ConnectionError as e:
+        print(f"{red}[ERROR] Connection Error: {e}. Check your internet connection or proxy settings.{reset}")
+    except requests.exceptions.Timeout as e:
+        print(f"{red}[ERROR] Request timed out after {timeout} seconds: {e}{reset}")
+    except requests.exceptions.RequestException as e:
+        print(f"{red}[ERROR] An unexpected requests error occurred: {e}{reset}")
+    except ValueError as e: # This handles json.decoder.JSONDecodeError if response is not JSON
+        print(f"{red}[ERROR] Error decoding JSON response: {e}. The response content might not be valid JSON.{reset}")
+    except Exception as e:
+        print(f"{red}[ERROR] An unexpected general error occurred: {e}{reset}")
+
+    found_domains.extend(sorted(list(temp_domains)))
+
+# --- Main execution block ---
+if __name__ == "__main__":
+    print_header("Subdomain Finder (crt.sh)")
+
+    # User input
+    target_site = str(input(f"{green}[INPUT] Enter Target Domain (e.g., example.com) :{reset} ")).strip()
+
+    if not target_site:
+        print(f"{red}[!] Target domain cannot be empty. Exiting.{reset}")
+        sys.exit(1)
+
+    print(f"\n{blue}{'-'*60}{reset}")
+    print(f"{blue} Searching for subdomains of: {target_site}{reset}")
+    print(f"{blue}{'-'*60}{reset}")
+
+    get_domains(target_site)
+
+    if found_domains:
+        print(f"\n{green}{'='*60}{reset}")
+        print(f"{green}{' ' * ((60 - len(f' Found Domains: {len(found_domains)} ')) // 2)} Found Domains: {len(found_domains)} {reset}")
+        print(f"{green}{'='*60}{reset}")
+        
+        for i, sub in enumerate(found_domains):
+            print(f" {blue}[{i+1}]{reset} {sub}")
+        
+        print(f"\n{green}{'='*60}{reset}")
+        print(f"{green}{' ' * ((60 - len(' Scan Complete ')) // 2)} Scan Complete {reset}")
+        print(f"{green}{'='*60}{reset}\n")
+
+    else:
+        print(f"\n{red}[!] No unique domains found for {target_site} via crt.sh.{reset}")
+        print(f"{yellow}[TIP] Double-check the domain name or try again later.{reset}")
+
+    print_footer("Thanks for using the Subdomain Finder!")

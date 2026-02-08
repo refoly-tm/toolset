@@ -1,0 +1,139 @@
+#!/bin/python3
+# basic directory bruteforcing tool
+
+import requests
+import sys # For sys.exit()
+import time # For the loading animation or delays
+import os # For clear screen functionality (optional)
+
+# --- ANSI Color Codes for UI ---
+COLOR_BLUE = "\033[94m"
+COLOR_GREEN = "\033[92m"
+COLOR_YELLOW = "\033[93m"
+COLOR_RED = "\033[91m"
+COLOR_CYAN = "\033[96m"
+COLOR_RESET = "\033[0m"
+COLOR_BOLD = "\033[1m"
+COLOR_UNDERLINE = "\033[4m"
+# ---------------------------------
+
+found_urls = []
+
+# --- UI Elements & Helpers ---
+def clear_screen():
+    # for windows
+    if os.name == 'nt':
+        _ = os.system('cls')
+    # for mac and linux(here, os.name is 'posix')
+    else:
+        _ = os.system('clear')
+
+def print_header(title):
+    clear_screen() # Clears screen at the start
+    print(f"{COLOR_BOLD}{COLOR_BLUE}{'='*60}{COLOR_RESET}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE}{' ' * ((60 - len(title)) // 2)}{title}{COLOR_RESET}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE}{'='*60}{COLOR_RESET}\n")
+
+def print_footer(message):
+    print(f"\n{COLOR_BOLD}{COLOR_BLUE}{'='*60}{COLOR_RESET}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE}{' ' * ((60 - len(message)) // 2)}{message}{COLOR_RESET}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE}{'='*60}{COLOR_RESET}\n")
+
+# --- Getting domain list logic ---
+def brute(proto: str, target: str, word: str, timeout: float) -> None:
+    try:
+        url = f"{proto}://{target}/{word.strip()}" #.strip() to remove potential newlines from wordlist
+        response = requests.get(url, timeout=timeout)
+
+        if response.status_code == 200:
+            found_urls.append(url)
+            print(f"{COLOR_GREEN}[+] Found: {url} (Status: {response.status_code}){COLOR_RESET}")
+        elif response.status_code == 404:
+            # Optionally print 404s for debugging, or ignore for cleaner output
+            # print(f"{COLOR_YELLOW}[-] Not Found: {url} (Status: {response.status_code}){COLOR_RESET}")
+            pass
+        else:
+            print(f"{COLOR_YELLOW}[?] {url} (Status: {response.status_code}){COLOR_RESET}")
+
+    except requests.exceptions.ConnectionError:
+        print(f"{COLOR_RED}[!] Connection Error for {url}. Target might be down or unreachable.{COLOR_RESET}")
+    except requests.exceptions.Timeout:
+        print(f"{COLOR_RED}[!] Request timed out for {url}. Skipping...{COLOR_RESET}")
+    except requests.exceptions.RequestException as exp:
+        print(f"{COLOR_RED}[!] An unexpected requests error occurred for {url}: {exp}{COLOR_RESET}")
+    except Exception as exp:
+        print(f"{COLOR_RED}[!] Aborting brute-force due to unexpected error: {exp}{COLOR_RESET}")
+
+def open_file(wordlist_path: str) -> list:
+    try:
+        with open(wordlist_path, 'r', encoding='utf-8', errors='ignore') as wd:
+            # Using readlines() to get a list of lines, strip each one
+            words = [line.strip() for line in wd if line.strip()] 
+        print(f"{COLOR_GREEN}[INFO] Loaded {len(words)} words from wordlist: {wordlist_path}{COLOR_RESET}")
+        return words
+    except FileNotFoundError:
+        print(f"{COLOR_RED}[!] Wordlist file not found: {wordlist_path}{COLOR_RESET}")
+        sys.exit(1) # Exit if wordlist isn't found
+    except Exception as exp:
+        print(f"{COLOR_RED}[!] Error opening or reading wordlist: {exp}{COLOR_RESET}")
+        sys.exit(1)
+
+def main() -> None:
+    print_header("Directory Brute-Forcer")
+
+    try:
+        proto = str(input(f"{COLOR_YELLOW}[INPUT] Protocol (e.g., http, https): {COLOR_RESET}")).strip().lower()
+        if proto not in ['http', 'https']:
+            print(f"{COLOR_RED}[!] Invalid protocol '{proto}'. Please use 'http' or 'https'.{COLOR_RESET}")
+            sys.exit(1)
+
+        target = str(input(f"{COLOR_YELLOW}[INPUT] Target Domain (e.g., example.com): {COLOR_RESET}")).strip()
+        if not target:
+            print(f"{COLOR_RED}[!] Target domain cannot be empty. Exiting.{COLOR_RESET}")
+            sys.exit(1)
+
+        wordlist_path = str(input(f"{COLOR_YELLOW}[INPUT] Path To Wordlist File: {COLOR_RESET}")).strip()
+        
+        timeout_input = input(f"{COLOR_YELLOW}[INPUT] Timeout in seconds (e.g., 5.0): {COLOR_RESET}")
+        try:
+            timeout = float(timeout_input)
+            if timeout <= 0:
+                raise ValueError
+        except ValueError:
+            print(f"{COLOR_RED}[!] Invalid timeout value '{timeout_input}'. Using default 10.0 seconds.{COLOR_RESET}")
+            timeout = 10.0
+        
+        # Load words from the file
+        wordlist_words = open_file(wordlist_path)
+        
+    except Exception as exp:
+        print(f"{COLOR_RED}[!] Aborting setup due to unexpected error: {exp}{COLOR_RESET}")
+        sys.exit(1)
+
+    print(f"\n{COLOR_BOLD}{COLOR_BLUE}===================================={COLOR_RESET}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE}Starting Directory Brute-Force:{COLOR_RESET}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE} Target: {COLOR_RESET}{proto}://{target}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE} Wordlist: {COLOR_RESET}{wordlist_path} ({len(wordlist_words)} entries)")
+    print(f"{COLOR_BOLD}{COLOR_BLUE} Timeout: {COLOR_RESET}{timeout}s")
+    print(f"{COLOR_BOLD}{COLOR_BLUE}===================================={COLOR_RESET}\n")
+
+    # Iterate through the loaded words
+    for word in wordlist_words:
+        brute(proto, target, word, timeout)
+    
+    print(f"\n{COLOR_BOLD}{COLOR_BLUE}===================================={COLOR_RESET}")
+    if found_urls:
+        print(f"{COLOR_BOLD}{COLOR_BLUE}Scan Complete! Found {len(found_urls)} Directories/Files:{COLOR_RESET}")
+        print(f"{COLOR_BOLD}{COLOR_BLUE}------------------------------------{COLOR_RESET}")
+        for i, url in enumerate(sorted(found_urls)): # Sort for consistent output
+            print(f" {COLOR_GREEN}[{i+1}] {url}{COLOR_RESET}")
+    else:
+        print(f"{COLOR_YELLOW}No directories or files found for {target} with the given wordlist.{COLOR_RESET}")
+    print(f"{COLOR_BOLD}{COLOR_BLUE}===================================={COLOR_RESET}")
+
+    print_footer("Brute-Force Finished!")
+
+# --- Entry point ---
+if __name__ == "__main__":
+    main()
+
